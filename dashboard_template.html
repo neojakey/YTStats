@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>YouTube Channel Stats</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231a1a19'/%3E%3Crect x='6' y='17' width='5.5' height='9' rx='1.5' fill='%233987e5'/%3E%3Crect x='13.25' y='11' width='5.5' height='15' rx='1.5' fill='%23eb6834'/%3E%3Crect x='20.5' y='6' width='5.5' height='20' rx='1.5' fill='%233987e5'/%3E%3C/svg%3E">
+<style>
+  :root {
+    color-scheme: light;
+    --page: #f9f9f7;
+    --surface: #fcfcfb;
+    --text-primary: #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted: #898781;
+    --grid: #e1e0d9;
+    --axis: #c3c2b7;
+    --border: rgba(11, 11, 11, 0.10);
+    --up: #006300;
+    --down: #d03b3b;
+    --series-1: #2a78d6;
+    --series-2: #eb6834;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --page: #0d0d0d;
+      --surface: #1a1a19;
+      --text-primary: #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted: #898781;
+      --grid: #2c2c2a;
+      --axis: #383835;
+      --border: rgba(255, 255, 255, 0.10);
+      --up: #0ca30c;
+      --down: #e66767;
+      --series-1: #3987e5;
+      --series-2: #d95926;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--page);
+    color: var(--text-primary);
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  main { max-width: 1100px; margin: 0 auto; padding: 24px 16px 48px; }
+  header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 16px; margin-bottom: 20px; }
+  h1 { font-size: 22px; font-weight: 600; margin: 0; }
+  h2 { font-size: 15px; font-weight: 600; margin: 0; }
+  .updated { color: var(--text-muted); font-size: 13px; }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 18px;
+  }
+  .channels { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; margin-bottom: 28px; }
+  .channel-head { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
+  .key-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+  .channel-head a { color: var(--text-muted); font-size: 13px; text-decoration: none; }
+  .channel-head a:hover { text-decoration: underline; }
+  .tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+  .tile-label { color: var(--text-secondary); font-size: 13px; }
+  .tile-value { font-size: 26px; font-weight: 600; line-height: 1.2; margin: 2px 0 4px; }
+  .delta { font-size: 12px; color: var(--text-muted); }
+  .delta b { font-weight: 600; }
+  .delta.up b { color: var(--up); }
+  .delta.down b { color: var(--down); }
+
+  .filters { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 12px; }
+  .filters span { color: var(--text-secondary); font-size: 13px; margin-right: 4px; }
+  .filters button {
+    font: inherit; font-size: 13px;
+    color: var(--text-secondary);
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 3px 12px;
+    cursor: pointer;
+  }
+  .filters button[aria-pressed="true"] { color: var(--text-primary); background: var(--surface); border-color: var(--axis); font-weight: 600; }
+  .charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(420px, 100%), 1fr)); gap: 16px; }
+  .charts > .card { min-width: 0; }
+  .chart-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 4px 12px; margin-bottom: 8px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; color: var(--text-secondary); font-size: 12px; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .line-key { width: 14px; height: 2px; border-radius: 1px; display: inline-block; }
+  .chart { position: relative; height: 260px; }
+  .chart svg { display: block; overflow: visible; }
+  .chart svg:focus { outline: none; }
+  .chart svg:focus-visible { outline: 2px solid var(--axis); outline-offset: 4px; border-radius: 4px; }
+  .empty { color: var(--text-muted); padding: 40px 0; text-align: center; }
+  .tick { fill: var(--text-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+  .end-name { fill: var(--text-muted); font-size: 11px; }
+  .end-value { fill: var(--text-primary); font-size: 13px; font-weight: 600; }
+  .tooltip {
+    position: absolute; pointer-events: none; z-index: 2;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+    padding: 8px 10px; font-size: 12px; min-width: 150px;
+  }
+  .tooltip .tt-date { color: var(--text-muted); margin-bottom: 4px; }
+  .tooltip .tt-row { display: flex; align-items: center; gap: 8px; }
+  .tooltip .tt-row b { font-size: 13px; font-variant-numeric: tabular-nums; }
+  .tooltip .tt-row span:last-child { color: var(--text-secondary); }
+
+  details { margin-top: 24px; }
+  summary { cursor: pointer; color: var(--text-secondary); }
+  .table-wrap { overflow-x: auto; margin-top: 10px; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th, td { text-align: right; padding: 6px 10px; border-bottom: 1px solid var(--grid); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  th { color: var(--text-secondary); font-weight: 600; }
+  th:first-child, td:first-child, th:nth-child(2), td:nth-child(2) { text-align: left; }
+
+  .videos { display: grid; gap: 16px; margin-top: 28px; }
+  .videos > .card { min-width: 0; }
+  .badge { font-size: 11px; color: var(--text-secondary); border: 1px solid var(--border); border-radius: 999px; padding: 1px 8px; }
+  .video-count { color: var(--text-muted); font-size: 13px; }
+  .video-table th button { font: inherit; font-weight: 600; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+  .video-table th[aria-sort="descending"] button::after { content: " ▼"; font-size: 10px; }
+  .video-table th[aria-sort="ascending"] button::after { content: " ▲"; font-size: 10px; }
+  .video-table td:first-child { white-space: normal; min-width: 220px; max-width: 460px; }
+  .video-toggle { font: inherit; color: var(--text-primary); background: none; border: 0; padding: 0; text-align: left; cursor: pointer; }
+  .video-toggle:hover { text-decoration: underline; }
+  .video-toggle::before { content: "▸ "; color: var(--text-muted); }
+  .video-toggle[aria-expanded="true"]::before { content: "▾ "; }
+  .video-title { display: flex; align-items: baseline; gap: 6px; }
+  .yt-link { color: var(--text-muted); text-decoration: none; flex: none; }
+  .yt-link:hover { color: var(--text-primary); }
+  .video-meta { color: var(--text-muted); font-size: 12px; }
+  .video-table tr.gone td { color: var(--text-muted); }
+  .video-table tr.detail td { padding: 8px 0 16px; }
+  .video-chart { height: 200px; }
+  .muted { color: var(--text-muted); font-size: 12px; }
+
+  @media (max-width: 520px) {
+    .tile-value { font-size: 22px; }
+    .channels { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>YouTube channel stats</h1>
+    <div class="updated" id="updated"></div>
+  </header>
+  <section class="channels" id="channels"></section>
+  <div class="filters" id="filters" role="group" aria-label="Chart date range">
+    <span>Range</span>
+  </div>
+  <section class="charts">
+    <div class="card">
+      <div class="chart-head"><h2>Subscribers</h2><div class="legend" data-legend></div></div>
+      <div class="chart" id="chart-subscribers"></div>
+    </div>
+    <div class="card">
+      <div class="chart-head"><h2>Total views</h2><div class="legend" data-legend></div></div>
+      <div class="chart" id="chart-views"></div>
+    </div>
+  </section>
+  <section class="videos" id="videos"></section>
+  <details>
+    <summary>Data table</summary>
+    <div class="table-wrap"><table id="table"></table></div>
+  </details>
+</main>
+
+<script>
+const DATA = /*__DATA__*/null;
+
+const DAY = 86400000;
+const SVG_NS = "http://www.w3.org/2000/svg";
+const num = new Intl.NumberFormat();
+const compact = new Intl.NumberFormat(undefined, { notation: "compact", maximumFractionDigits: 1 });
+const toMs = (d) => Date.parse(d + "T00:00:00Z");
+const fmtDate = (d, opts = { month: "short", day: "numeric" }) =>
+  new Date(toMs(d)).toLocaleDateString(undefined, { ...opts, timeZone: "UTC" });
+const seriesColor = (i) => `var(--series-${i + 1})`;
+
+// Range, sort order and open video charts survive the automatic reload.
+// sessionStorage can be unavailable (private mode, blocked storage): the page still works.
+const STATE_KEY = "ytstats-view";
+const state = (() => { try { return JSON.parse(sessionStorage.getItem(STATE_KEY)) || {}; } catch { return {}; } })();
+state.sort ??= {};
+state.open ??= [];
+function saveState() { try { sessionStorage.setItem(STATE_KEY, JSON.stringify(state)); } catch {} }
+
+// Build DOM nodes. Text always goes in via textContent (channel titles come from the API).
+function el(tag, props = {}, ...children) {
+  const node = document.createElement(tag);
+  for (const [k, v] of Object.entries(props)) {
+    if (k === "text") node.textContent = v;
+    else if (k === "style") node.style.cssText = v;
+    else node.setAttribute(k, v);
+  }
+  node.append(...children);
+  return node;
+}
+function svg(tag, attrs = {}, text) {
+  const node = document.createElementNS(SVG_NS, tag);
+  for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, v);
+  if (text != null) node.textContent = text;
+  return node;
+}
+
+// ---- Change since an earlier day -------------------------------------------
+// Compares the latest snapshot with the last one on or before `days` ago.
+// If that exact day is missing (PC was off), it falls back to an earlier one
+// and says which date it compared against.
+function change(snaps, metric, days) {
+  const latest = snaps[snaps.length - 1];
+  const target = toMs(latest.date) - days * DAY;
+  let past = null;
+  for (const s of snaps) if (toMs(s.date) <= target) past = s;
+  if (!past || latest[metric] == null || past[metric] == null) return null;
+  const exact = toMs(past.date) === target;
+  const label = exact ? (days === 1 ? "since yesterday" : "since last week") : `since ${fmtDate(past.date)}`;
+  return { diff: latest[metric] - past[metric], label };
+}
+
+function deltaLine(snaps, metric, days) {
+  const c = change(snaps, metric, days);
+  if (!c) return el("div", { class: "delta", text: days === 1 ? "No earlier day yet" : "Under a week of history" });
+  const dir = c.diff > 0 ? "up" : c.diff < 0 ? "down" : "flat";
+  const sign = c.diff > 0 ? "▲ +" : c.diff < 0 ? "▼ −" : "";
+  return el("div", { class: `delta ${dir}` }, el("b", { text: sign + num.format(Math.abs(c.diff)) }), " " + c.label);
+}
+
+function renderChannels() {
+  const host = document.getElementById("channels");
+  DATA.channels.forEach((ch, i) => {
+    const snaps = ch.snapshots;
+    const latest = snaps[snaps.length - 1];
+    const tiles = el("div", { class: "tiles" });
+    for (const [metric, label] of [["subscribers", "Subscribers"], ["views", "Views"], ["videos", "Videos"]]) {
+      const value = latest[metric] == null ? "Hidden" : num.format(latest[metric]);
+      tiles.append(el("div", {},
+        el("div", { class: "tile-label", text: label }),
+        el("div", { class: "tile-value", text: value }),
+        deltaLine(snaps, metric, 1),
+        deltaLine(snaps, metric, 7),
+      ));
+    }
+    const link = el("a", { href: `https://www.youtube.com/${ch.handle}`, target: "_blank", rel: "noopener", text: ch.handle });
+    host.append(el("article", { class: "card" },
+      el("div", { class: "channel-head" },
+        el("span", { class: "key-dot", style: `background:${seriesColor(i)}` }),
+        el("h2", { text: ch.title }),
+        link,
+      ),
+      tiles,
+    ));
+  });
+}
+
+// ---- Line charts -------------------------------------------------------------
+let range = state.range || "all";
+
+function inRange(date) {
+  if (range === "all") return true;
+  const lastDate = Math.max(...DATA.channels.flatMap((c) => c.snapshots.map((s) => toMs(s.date))));
+  return toMs(date) > lastDate - Number(range) * DAY;
+}
+
+function niceTicks(max) {
+  if (max <= 0) max = 1;
+  const raw = max / 4;
+  const mag = 10 ** Math.floor(Math.log10(raw));
+  const f = raw / mag;
+  const step = Math.max(1, (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * mag);
+  const ticks = [];
+  for (let v = 0; v < max + step; v += step) ticks.push(v);
+  return ticks;
+}
+
+// Snapshots -> chart points for one metric, limited to the chosen range.
+const toPoints = (snaps, metric) => snaps
+  .filter((s) => s[metric] != null && inRange(s.date))
+  .map((s) => ({ t: toMs(s.date), date: s.date, v: s[metric] }));
+
+// series: [{ name, color, points }]
+function renderChart(host, series, label) {
+  host.replaceChildren();
+  const allPoints = series.flatMap((s) => s.points);
+  if (!allPoints.length) {
+    host.append(el("div", { class: "empty", text: "No data in this range yet." }));
+    return;
+  }
+
+  const width = host.clientWidth;
+  const height = host.clientHeight;
+  const roomForLabels = width >= 480;
+  const m = { l: 48, r: roomForLabels ? 120 : 12, t: 10, b: 26 };
+  const dates = [...new Set(allPoints.map((p) => p.date))].sort();
+  let t0 = toMs(dates[0]), t1 = toMs(dates[dates.length - 1]);
+  if (t0 === t1) t0 -= 6 * DAY;  // one day of data: put it at the right edge, next to its label
+  const ticks = niceTicks(Math.max(...allPoints.map((p) => p.v)));
+  const yMax = ticks[ticks.length - 1];
+  const x = (t) => m.l + ((t - t0) / (t1 - t0)) * (width - m.l - m.r);
+  const y = (v) => m.t + (1 - v / yMax) * (height - m.t - m.b);
+
+  const root = svg("svg", { width, height, tabindex: 0, role: "img",
+    "aria-label": `${label} over time; use left and right arrow keys to read values` });
+
+  // Gridlines and y-axis ticks
+  for (const v of ticks) {
+    root.append(svg("line", { x1: m.l, x2: width - m.r, y1: y(v), y2: y(v),
+      stroke: v === 0 ? "var(--axis)" : "var(--grid)", "stroke-width": 1, "shape-rendering": "crispEdges" }));
+    root.append(svg("text", { x: m.l - 8, y: y(v) + 4, "text-anchor": "end", class: "tick" }, compact.format(v)));
+  }
+  // X-axis: up to 5 dates, evenly spaced in time (not by row, so gaps don't bunch them up)
+  const nLabels = Math.min(5, dates.length, Math.floor((width - m.l - m.r) / 70) || 1);
+  const nearestDate = (t) => dates.reduce((best, d) => Math.abs(toMs(d) - t) < Math.abs(toMs(best) - t) ? d : best);
+  const firstT = toMs(dates[0]), lastT = toMs(dates[dates.length - 1]);
+  const labelDates = nLabels <= 1 ? [dates[dates.length - 1]]
+    : Array.from({ length: nLabels }, (_, k) => nearestDate(firstT + (k * (lastT - firstT)) / (nLabels - 1)));
+  for (const d of new Set(labelDates)) {
+    root.append(svg("text", { x: x(toMs(d)), y: height - 6, "text-anchor": "middle", class: "tick" }, fmtDate(d)));
+  }
+
+  // Lines break where days are missing, so a gap never looks like real data.
+  for (const s of series) {
+    const segments = [];
+    for (const p of s.points) {
+      const seg = segments[segments.length - 1];
+      if (seg && p.t - seg[seg.length - 1].t === DAY) seg.push(p);
+      else segments.push([p]);
+    }
+    for (const seg of segments) {
+      if (seg.length > 1) {
+        root.append(svg("path", {
+          d: seg.map((p, k) => `${k ? "L" : "M"}${x(p.t)},${y(p.v)}`).join(""),
+          fill: "none", stroke: s.color, "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round",
+        }));
+      } else {
+        root.append(svg("circle", { cx: x(seg[0].t), cy: y(seg[0].v), r: 4, fill: s.color, stroke: "var(--surface)", "stroke-width": 2 }));
+      }
+    }
+    const last = s.points[s.points.length - 1];
+    if (last) root.append(svg("circle", { cx: x(last.t), cy: y(last.v), r: 4, fill: s.color, stroke: "var(--surface)", "stroke-width": 2 }));
+  }
+
+  // Direct end labels, only when there is room and they don't collide.
+  if (roomForLabels) {
+    const ends = series.filter((s) => s.points.length).map((s) => ({ s, p: s.points[s.points.length - 1] }));
+    const ys = ends.map((e) => y(e.p.v)).sort((a, b) => a - b);
+    const collide = ys.some((v, k) => k && v - ys[k - 1] < 30);
+    if (!collide) {
+      for (const { s, p } of ends) {
+        const lx = width - m.r + 12;
+        root.append(svg("text", { x: lx, y: y(p.v) - 3, class: "end-name" }, s.name));
+        root.append(svg("text", { x: lx, y: y(p.v) + 12, class: "end-value" }, num.format(p.v)));
+      }
+    }
+  }
+
+  // Hover / keyboard layer: a crosshair snaps to the nearest day and one
+  // tooltip lists every channel's value for that day.
+  const hover = svg("g", { visibility: "hidden" });
+  const crossLine = svg("line", { y1: m.t, y2: height - m.b, stroke: "var(--axis)", "stroke-width": 1 });
+  hover.append(crossLine);
+  const hoverDots = series.map((s) => {
+    const c = svg("circle", { r: 4, fill: s.color, stroke: "var(--surface)", "stroke-width": 2 });
+    hover.append(c);
+    return c;
+  });
+  root.append(hover);
+  const hit = svg("rect", { x: m.l, y: 0, width: Math.max(0, width - m.l - m.r), height, fill: "transparent" });
+  root.append(hit);
+  const tip = el("div", { class: "tooltip", hidden: "" });
+  host.append(root, tip);
+
+  let index = dates.length - 1;
+  function show(i) {
+    index = i;
+    const d = dates[i];
+    const cx = x(toMs(d));
+    crossLine.setAttribute("x1", cx);
+    crossLine.setAttribute("x2", cx);
+    tip.replaceChildren(el("div", { class: "tt-date", text: fmtDate(d, { weekday: "short", month: "short", day: "numeric", year: "numeric" }) }));
+    series.forEach((s, k) => {
+      const p = s.points.find((q) => q.date === d);
+      hoverDots[k].setAttribute("visibility", p ? "visible" : "hidden");
+      if (p) { hoverDots[k].setAttribute("cx", cx); hoverDots[k].setAttribute("cy", y(p.v)); }
+      tip.append(el("div", { class: "tt-row" },
+        el("span", { class: "line-key", style: `background:${s.color}` }),
+        el("b", { text: p ? num.format(p.v) : "no data" }),
+        el("span", { text: s.name }),
+      ));
+    });
+    hover.setAttribute("visibility", "visible");
+    tip.hidden = false;
+    const tipW = tip.offsetWidth;
+    tip.style.left = `${cx + 12 + tipW > width ? cx - 12 - tipW : cx + 12}px`;
+    tip.style.top = `${m.t}px`;
+  }
+  function hide() { hover.setAttribute("visibility", "hidden"); tip.hidden = true; }
+  function nearest(px) {
+    let best = 0;
+    dates.forEach((d, i) => { if (Math.abs(x(toMs(d)) - px) < Math.abs(x(toMs(dates[best])) - px)) best = i; });
+    return best;
+  }
+  hit.addEventListener("pointermove", (e) => show(nearest(e.clientX - root.getBoundingClientRect().left)));
+  hit.addEventListener("pointerleave", hide);
+  root.addEventListener("focus", () => show(index));
+  root.addEventListener("blur", hide);
+  root.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowLeft") { show(Math.max(0, index - 1)); e.preventDefault(); }
+    if (e.key === "ArrowRight") { show(Math.min(dates.length - 1, index + 1)); e.preventDefault(); }
+  });
+}
+
+const channelSeries = (metric) => DATA.channels.map((ch, i) => ({
+  name: ch.title, color: seriesColor(i), points: toPoints(ch.snapshots, metric),
+}));
+// Every chart on the page (host -> draw function). Video charts join when opened.
+const charts = new Map([
+  [document.getElementById("chart-subscribers"), (host) => renderChart(host, channelSeries("subscribers"), "Subscribers")],
+  [document.getElementById("chart-views"), (host) => renderChart(host, channelSeries("views"), "Views")],
+]);
+function renderCharts() {
+  for (const [host, draw] of charts) {
+    if (host.isConnected) draw(host);
+    else charts.delete(host);  // its table row was re-rendered
+  }
+}
+
+// ---- Video tables ------------------------------------------------------------
+// Views gained over the last 7 days. A video published inside that window
+// counts all its views as gained ("new"); an older video with under a week of
+// history has no gain yet. Dates are compared at day level, so a video
+// published near midnight can land on either side.
+function sevenDayGain(video) {
+  const snaps = video.snapshots;
+  const latest = snaps[snaps.length - 1];
+  const baseline = toMs(latest.date) - 7 * DAY;
+  let past = null;
+  for (const s of snaps) if (toMs(s.date) <= baseline) past = s;
+  if (past) return { v: latest.views - past.views, isNew: false };
+  if (Date.parse(video.publishedAt) >= baseline + DAY) return { v: latest.views, isNew: true };
+  return null;
+}
+
+function fmtDuration(sec) {
+  if (sec == null) return "";
+  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = String(sec % 60).padStart(2, "0");
+  return h ? `${h}:${String(m).padStart(2, "0")}:${s}` : `${m}:${s}`;
+}
+
+const VIDEO_COLUMNS = [
+  { key: "title", label: "Video", value: (r) => r.video.title.toLowerCase(), firstDesc: false },
+  { key: "published", label: "Published", value: (r) => r.video.publishedAt, firstDesc: true },
+  { key: "views", label: "Views", value: (r) => r.latest.views, firstDesc: true },
+  { key: "gain", label: "Last 7 days", value: (r) => r.gain?.v ?? null, firstDesc: true },
+  { key: "likes", label: "Likes", value: (r) => r.latest.likes, firstDesc: true },
+  { key: "comments", label: "Comments", value: (r) => r.latest.comments, firstDesc: true },
+];
+
+function renderVideoTables() {
+  const host = document.getElementById("videos");
+  DATA.channels.forEach((ch, i) => {
+    if (!ch.videos.length) return;
+    const rows = ch.videos.map((video) => ({
+      video,
+      latest: video.snapshots[video.snapshots.length - 1],
+      gain: sevenDayGain(video),
+      gone: video.lastSeen < DATA.latestDate,
+    }));
+    const publicCount = rows.filter((r) => !r.gone).length;
+    const table = el("table", { class: "video-table" });
+    const head = el("div", { class: "chart-head" },
+      el("div", { style: "display:flex;align-items:center;gap:8px;flex-wrap:wrap" },
+        el("span", { class: "key-dot", style: `background:${seriesColor(i)}` }),
+        el("h2", { text: `${ch.title} videos` }),
+        ch.format ? el("span", { class: "badge", text: ch.format }) : "",
+      ),
+      el("span", { class: "video-count", text: `${publicCount} public video${publicCount === 1 ? "" : "s"}` }),
+    );
+    host.append(el("div", { class: "card" }, head, el("div", { class: "table-wrap" }, table)));
+    drawVideoTable(table, ch, i, rows);
+  });
+}
+
+function drawVideoTable(table, ch, colorIndex, rows) {
+  const sort = state.sort[ch.handle] ?? { key: "views", desc: true };
+  const col = VIDEO_COLUMNS.find((c) => c.key === sort.key) ?? VIDEO_COLUMNS[2];
+  // Blanks (no history yet, hidden likes) always sort last.
+  const sorted = [...rows].sort((a, b) => {
+    const va = col.value(a), vb = col.value(b);
+    if (va == null || vb == null) return (va == null) - (vb == null);
+    const cmp = va < vb ? -1 : va > vb ? 1 : 0;
+    return sort.desc ? -cmp : cmp;
+  });
+
+  const headRow = el("tr", {}, ...VIDEO_COLUMNS.map((c) => {
+    const button = el("button", { type: "button", text: c.label });
+    button.addEventListener("click", () => {
+      state.sort[ch.handle] = c.key === sort.key ? { key: c.key, desc: !sort.desc } : { key: c.key, desc: c.firstDesc };
+      saveState();
+      drawVideoTable(table, ch, colorIndex, rows);
+      renderCharts();
+    });
+    const th = el("th", {}, button);
+    if (c.key === sort.key) th.setAttribute("aria-sort", sort.desc ? "descending" : "ascending");
+    return th;
+  }));
+
+  const body = el("tbody");
+  for (const r of sorted) {
+    const v = r.video;
+    const url = ch.format === "Shorts"
+      ? `https://www.youtube.com/shorts/${encodeURIComponent(v.id)}`
+      : `https://www.youtube.com/watch?v=${encodeURIComponent(v.id)}`;
+    const toggle = el("button", { type: "button", class: "video-toggle", "aria-expanded": "false", text: v.title });
+    const meta = [fmtDuration(v.duration), r.gone ? "No longer public" : ""].filter(Boolean).join(" · ");
+    const gainCell = r.gain == null ? el("td", { class: "muted", text: "—" })
+      : el("td", {}, (r.gain.v >= 0 ? "+" : "−") + num.format(Math.abs(r.gain.v)),
+          r.gain.isNew ? el("span", { class: "muted", text: " new" }) : "");
+    const row = el("tr", r.gone ? { class: "gone" } : {},
+      el("td", {},
+        el("div", { class: "video-title" }, toggle,
+          el("a", { class: "yt-link", href: url, target: "_blank", rel: "noopener", "aria-label": "Open on YouTube", text: "↗" })),
+        meta ? el("div", { class: "video-meta", text: meta }) : ""),
+      el("td", { text: new Date(v.publishedAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) }),
+      el("td", { text: num.format(r.latest.views) }),
+      gainCell,
+      el("td", r.latest.likes == null ? { class: "muted", text: "Hidden" } : { text: num.format(r.latest.likes) }),
+      el("td", r.latest.comments == null ? { class: "muted", text: "Off" } : { text: num.format(r.latest.comments) }),
+    );
+    body.append(row);
+
+    // Click the title to show this video's views over time underneath.
+    let detail = null;
+    const open = () => {
+      const chartHost = el("div", { class: "chart video-chart" });
+      detail = el("tr", { class: "detail" }, el("td", { colspan: VIDEO_COLUMNS.length }, chartHost));
+      row.after(detail);
+      const draw = (h) => renderChart(h, [{ name: "Views", color: seriesColor(colorIndex), points: toPoints(v.snapshots, "views") }], `Views of ${v.title}`);
+      charts.set(chartHost, draw);
+      draw(chartHost);
+      toggle.setAttribute("aria-expanded", "true");
+    };
+    toggle.addEventListener("click", () => {
+      if (detail) {
+        detail.remove();
+        detail = null;
+        toggle.setAttribute("aria-expanded", "false");
+        state.open = state.open.filter((id) => id !== v.id);
+      } else {
+        state.open = [...state.open.filter((id) => id !== v.id), v.id];
+        open();
+      }
+      saveState();
+    });
+    if (state.open.includes(v.id)) queueMicrotask(open);  // after the table is in the page, so it can measure width
+  }
+  table.replaceChildren(el("thead", {}, headRow), body);
+}
+
+function renderLegends() {
+  for (const legend of document.querySelectorAll("[data-legend]")) {
+    DATA.channels.forEach((ch, i) => legend.append(el("span", {},
+      el("span", { class: "line-key", style: `background:${seriesColor(i)}` }), ch.title)));
+  }
+}
+
+function renderFilters() {
+  const host = document.getElementById("filters");
+  const buttons = [["7", "7 days"], ["30", "30 days"], ["90", "90 days"], ["all", "All"]].map(([value, label]) => {
+    const b = el("button", { type: "button", "aria-pressed": String(value === range), text: label });
+    b.addEventListener("click", () => {
+      range = value;
+      state.range = value;
+      saveState();
+      buttons.forEach((other) => other.setAttribute("aria-pressed", String(other === b)));
+      renderCharts();
+    });
+    return b;
+  });
+  host.append(...buttons);
+}
+
+function renderTable() {
+  const rows = DATA.channels.flatMap((ch) => ch.snapshots.map((s) => ({ ch: ch.title, ...s })))
+    .sort((a, b) => b.date.localeCompare(a.date) || a.ch.localeCompare(b.ch));
+  const table = document.getElementById("table");
+  table.append(el("thead", {}, el("tr", {}, ...["Date", "Channel", "Subscribers", "Views", "Videos"].map((h) => el("th", { text: h })))));
+  table.append(el("tbody", {}, ...rows.map((r) => el("tr", {},
+    el("td", { text: r.date }),
+    el("td", { text: r.ch }),
+    el("td", { text: r.subscribers == null ? "Hidden" : num.format(r.subscribers) }),
+    el("td", { text: num.format(r.views) }),
+    el("td", { text: num.format(r.videos) }),
+  ))));
+}
+
+document.getElementById("updated").textContent =
+  "Last updated " + new Date(DATA.generatedAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
+  + " · reloads every 15 min";
+
+// The fetch runs at :00/:15/:30/:45 (plus up to a minute of random delay), so
+// reload at :03/:18/:33/:48. A hidden tab waits until it is shown again.
+function scheduleReload() {
+  const t = new Date();
+  t.setSeconds(0, 0);
+  do t.setMinutes(t.getMinutes() + 1); while (t.getMinutes() % 15 !== 3);
+  setTimeout(() => {
+    if (!document.hidden) location.reload();
+    else document.addEventListener("visibilitychange", () => location.reload(), { once: true });
+  }, t - Date.now());
+}
+scheduleReload();
+
+if (!DATA.channels.length) {
+  document.getElementById("channels").append(el("div", { class: "empty", text: "No data yet. Run python3 fetch.py first." }));
+} else {
+  renderChannels();
+  renderLegends();
+  renderFilters();
+  renderVideoTables();
+  renderCharts();
+  renderTable();
+  // Redraw charts when the page width changes (height changes when a video chart opens; ignore those).
+  let resizeTimer, lastWidth = 0;
+  new ResizeObserver(([entry]) => {
+    const w = Math.round(entry.contentRect.width);
+    if (w === lastWidth) return;
+    lastWidth = w;
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(renderCharts, 100);
+  }).observe(document.querySelector("main"));
+}
+</script>
+</body>
+</html>
